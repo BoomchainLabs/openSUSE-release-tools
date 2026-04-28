@@ -465,6 +465,25 @@ class CheckerBugowner(ReviewBot.ReviewBot):
             return ["`whitelisted`"]
         raise ValueError("Control should never reach here")
 
+    def _format_gitea_review_warnings(self, warnings):
+        return "\n".join("**Warning**: " + w for w in warnings) + "\n\n"
+
+    def _format_gitea_accepted_message(self, warnings, validated_packages, packages_maintainers):
+        if validated_packages:
+            packages_maintainers_messages = [
+                "\n".join(
+                    f"   + {m}" for m in maintainers
+                )
+                for maintainers in packages_maintainers]
+            validate_packages_message = "\n".join(
+                f" - `{p}`:\n{m}" for p, m in zip(validated_packages, packages_maintainers_messages) if m
+            )
+            packages_message = f"The following packages were checked and are covered either in `{MAINTAINERSHIP_FILE}`" + \
+                f" or `{WHITELIST_FILE}`:\n\n" + validate_packages_message
+        else:
+            packages_message = ""
+        return self._format_gitea_review_warnings(warnings) + "The change does not introduce orphan packages. " + packages_message
+
     def _gitea_check_source_submission_v2(
         self,
         head_project: str,
@@ -518,30 +537,11 @@ class CheckerBugowner(ReviewBot.ReviewBot):
 
         is_valid = len(orphans) == 0
 
-        review_warnings = "\n".join("**Warning**: " + w for w in warnings) + "\n\n"
-
         if is_valid:
-            if validated_packages:
-                packages_maintainers = [self._gitea_package_maintainers(p) for p in validated_packages]
-
-                packages_maintainers_messages = []
-                for maintainers in packages_maintainers:
-                    packages_maintainers_messages.append("\n".join(
-                        f"   + {m}" for m in maintainers
-                    ))
-
-                validate_packages_message = "\n".join(
-                    f" - `{p}`:\n{m}" for p, m in zip(validated_packages, packages_maintainers_messages) if m
-                )
-                packages_message = f"The following packages were checked and are covered either in `{MAINTAINERSHIP_FILE}`" + \
-                    f" or `{WHITELIST_FILE}`:\n\n" + validate_packages_message
-            else:
-                packages_message = ""
-
-            self.review_messages["accepted"] = review_warnings + \
-                "The change does not introduce orphan packages. " + packages_message
+            packages_maintainers = [self._gitea_package_maintainers(p) for p in validated_packages]
+            self.review_messages["accepted"] = self._format_gitea_accepted_message(warnings, validated_packages, packages_maintainers)
         else:
-            self.review_messages["declined"] = review_warnings + \
+            self.review_messages["declined"] = self._format_gitea_review_warnings(warnings) + \
                 f"Missing maintainership information for {', '.join(orphans)}." + \
                 f" Please edit {MAINTAINERSHIP_FILE} and resubmit."
 
