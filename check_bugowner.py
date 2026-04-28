@@ -465,23 +465,22 @@ class CheckerBugowner(ReviewBot.ReviewBot):
             return ["`whitelisted`"]
         raise ValueError("Control should never reach here")
 
-    def _gitea_check_source_submission(
+    def _gitea_check_source_submission_v2(
         self,
         head_project: str,
         head_package: str,
         head_revision: str,
         base_project: str,
         base_package: str,
+        base_revision: str,
     ) -> bool:
         # If the caches are more than a day old, clear them
         self._cache_clear(self.ldap_cache)
         self._cache_clear(self.email_cache)
 
-        # Get the target branch or commit
+        # Get the target branch if set
         if self.request.actions[0].tgt_branch:
             base_revision = self.request.actions[0].tgt_branch
-        else:
-            base_revision = self.request.actions[0].tgt_rev
 
         # Create the repo in case it doesn't exist
         # or checkout the base revision in case it does
@@ -554,9 +553,11 @@ class CheckerBugowner(ReviewBot.ReviewBot):
 
         return is_valid
 
-    def check_source_submission(self, src_project, src_package, src_rev, target_project, target_package):
+    def check_source_submission_v2(self, src_project, src_package, src_rev, target_project, target_package, target_revision):
         if self.platform.name == "GITEA":
-            return self._gitea_check_source_submission(src_project, src_package, src_rev, target_project, target_package)
+            return self._gitea_check_source_submission_v2(
+                src_project, src_package, src_rev, target_project, target_package, target_revision
+            )
         elif self.platform.name == "OBS":
             return self._obs_check_source_submission(src_project, src_package, src_rev, target_project, target_package)
         else:
