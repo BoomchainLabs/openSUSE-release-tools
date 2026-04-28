@@ -417,8 +417,7 @@ class CheckerBugowner(ReviewBot.ReviewBot):
                     not_found_users.append(e)
 
         if not_found_users:
-            users = ', '.join(not_found_users)
-            self.logger.warning(f"The following users were not found on LDAP: {users}.")
+            self.logger.warning(f"The following users were not found on LDAP: {', '.join(not_found_users)}.")
 
         # Get inactive users
         inactive_users = [
@@ -442,7 +441,7 @@ class CheckerBugowner(ReviewBot.ReviewBot):
             if self.maintainership_format_version == MaintainershipFormat.one_dot_o:
                 users = self.maintained[package].get("users", False)
                 if not users:
-                    self.logger.info(f"No users found for {package}")
+                    self.logger.info(f"No users found for {package} in {MAINTAINERSHIP_FILE}")
             else:
                 users = self.maintained[package]
 
@@ -459,7 +458,7 @@ class CheckerBugowner(ReviewBot.ReviewBot):
                     groups = ', '.join('[`' + g + '`](https://build.suse.de/groups/' + g + ')' for g in groups)
                     groups_message = [f"OBS groups: {groups}."]
                 else:
-                    self.logger.debug(f"No groups found for {package}")
+                    self.logger.debug(f"No groups found for {package} in {MAINTAINERSHIP_FILE}")
 
             return users_message + groups_message
         else:
