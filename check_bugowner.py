@@ -5,6 +5,7 @@
 import datetime
 import json
 import os
+import shutil
 import sys
 import re
 from enum import IntEnum
@@ -138,6 +139,10 @@ class CheckerBugowner(ReviewBot.ReviewBot):
     ):
         local_dir = Path(self._gitea_cache_dir(), owner, repo)
         self.logger.debug(f"Cache directory: {local_dir}")
+
+        if not self.scm.is_repo(local_dir):
+            self.logger.warning(f"Git cache directory appears corrupted, removing {local_dir}...")
+            shutil.rmtree(local_dir)
 
         if not local_dir.is_dir():
             self.logger.info(f"directory {local_dir} does not exists, creating it.")

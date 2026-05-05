@@ -55,6 +55,17 @@ class Git(scm.base.SCMBase):
         return diff, rebased
 
     @staticmethod
+    def is_repo(repo):
+        if isinstance(repo, git.Repo):
+            return True
+        else:
+            try:
+                git.Repo(repo)
+                return True
+            except git.exc.InvalidGitRepositoryError:
+                return False
+
+    @staticmethod
     def checkout_revision(repo, revision: str, revision_name=None, remote="origin", remote_url=None, fetch=True):
         if not isinstance(repo, git.Repo):
             repo = git.Repo(repo)
