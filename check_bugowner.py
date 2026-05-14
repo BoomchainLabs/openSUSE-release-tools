@@ -417,8 +417,7 @@ class CheckerBugowner(ReviewBot.ReviewBot):
                     not_found_users.append(e)
 
         if not_found_users:
-            users = ', '.join(not_found_users)
-            self.logger.warning(f"The following users were not found on LDAP: {users}.")
+            self.logger.warning(f"The following users were not found on LDAP: {', '.join(not_found_users)}.")
 
         # Get inactive users
         inactive_users = [
@@ -442,7 +441,7 @@ class CheckerBugowner(ReviewBot.ReviewBot):
             if self.maintainership_format_version == MaintainershipFormat.one_dot_o:
                 users = self.maintained[package].get("users", False)
                 if not users:
-                    self.logger.info(f"No users found for {package}")
+                    self.logger.info(f"No users found for {package} in {MAINTAINERSHIP_FILE}")
             else:
                 users = self.maintained[package]
 
@@ -459,30 +458,48 @@ class CheckerBugowner(ReviewBot.ReviewBot):
                     groups = ', '.join('[`' + g + '`](https://build.suse.de/groups/' + g + ')' for g in groups)
                     groups_message = [f"OBS groups: {groups}."]
                 else:
-                    self.logger.debug(f"No groups found for {package}")
+                    self.logger.debug(f"No groups found for {package} in {MAINTAINERSHIP_FILE}")
 
             return users_message + groups_message
         else:
             return ["`whitelisted`"]
         raise ValueError("Control should never reach here")
 
-    def _gitea_check_source_submission(
+    def _format_gitea_review_warnings(self, warnings):
+        return "\n".join("**Warning**: " + w for w in warnings) + "\n\n"
+
+    def _format_gitea_accepted_message(self, warnings, validated_packages, packages_maintainers):
+        if validated_packages:
+            packages_maintainers_messages = [
+                "\n".join(
+                    f"   + {m}" for m in maintainers
+                )
+                for maintainers in packages_maintainers]
+            validate_packages_message = "\n".join(
+                f" - `{p}`:\n{m}" for p, m in zip(validated_packages, packages_maintainers_messages) if m
+            )
+            packages_message = f"The following packages were checked and are covered either in `{MAINTAINERSHIP_FILE}`" + \
+                f" or `{WHITELIST_FILE}`:\n\n" + validate_packages_message
+        else:
+            packages_message = ""
+        return self._format_gitea_review_warnings(warnings) + "The change does not introduce orphan packages. " + packages_message
+
+    def _gitea_check_source_submission_v2(
         self,
         head_project: str,
         head_package: str,
         head_revision: str,
         base_project: str,
         base_package: str,
+        base_revision: str,
     ) -> bool:
         # If the caches are more than a day old, clear them
         self._cache_clear(self.ldap_cache)
         self._cache_clear(self.email_cache)
 
-        # Get the target branch or commit
+        # Get the target branch if set
         if self.request.actions[0].tgt_branch:
             base_revision = self.request.actions[0].tgt_branch
-        else:
-            base_revision = self.request.actions[0].tgt_rev
 
         # Create the repo in case it doesn't exist
         # or checkout the base revision in case it does
@@ -520,30 +537,11 @@ class CheckerBugowner(ReviewBot.ReviewBot):
 
         is_valid = len(orphans) == 0
 
-        review_warnings = "\n".join("**Warning**: " + w for w in warnings) + "\n\n"
-
         if is_valid:
-            if validated_packages:
-                packages_maintainers = [self._gitea_package_maintainers(p) for p in validated_packages]
-
-                packages_maintainers_messages = []
-                for maintainers in packages_maintainers:
-                    packages_maintainers_messages.append("\n".join(
-                        f"   + {m}" for m in maintainers
-                    ))
-
-                validate_packages_message = "\n".join(
-                    f" - `{p}`:\n{m}" for p, m in zip(validated_packages, packages_maintainers_messages) if m
-                )
-                packages_message = f"The following packages were checked and are covered either in `{MAINTAINERSHIP_FILE}`" + \
-                    f" or `{WHITELIST_FILE}`:\n\n" + validate_packages_message
-            else:
-                packages_message = ""
-
-            self.review_messages["accepted"] = review_warnings + \
-                "The change does not introduce orphan packages. " + packages_message
+            packages_maintainers = [self._gitea_package_maintainers(p) for p in validated_packages]
+            self.review_messages["accepted"] = self._format_gitea_accepted_message(warnings, validated_packages, packages_maintainers)
         else:
-            self.review_messages["declined"] = review_warnings + \
+            self.review_messages["declined"] = self._format_gitea_review_warnings(warnings) + \
                 f"Missing maintainership information for {', '.join(orphans)}." + \
                 f" Please edit {MAINTAINERSHIP_FILE} and resubmit."
 
@@ -555,9 +553,11 @@ class CheckerBugowner(ReviewBot.ReviewBot):
 
         return is_valid
 
-    def check_source_submission(self, src_project, src_package, src_rev, target_project, target_package):
+    def check_source_submission_v2(self, src_project, src_package, src_rev, target_project, target_package, target_revision):
         if self.platform.name == "GITEA":
-            return self._gitea_check_source_submission(src_project, src_package, src_rev, target_project, target_package)
+            return self._gitea_check_source_submission_v2(
+                src_project, src_package, src_rev, target_project, target_package, target_revision
+            )
         elif self.platform.name == "OBS":
             return self._obs_check_source_submission(src_project, src_package, src_rev, target_project, target_package)
         else:

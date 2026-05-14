@@ -3,6 +3,7 @@ import scm.base
 import git
 import os
 import shutil
+from pathlib import Path
 
 
 class Git(scm.base.SCMBase):
@@ -59,8 +60,11 @@ class Git(scm.base.SCMBase):
         if isinstance(repo, git.Repo):
             return True
         else:
+            path = repo if isinstance(repo, Path) else Path(repo)
+            if not path.is_dir():
+                return False
             try:
-                git.Repo(repo)
+                git.Repo(path)
                 return True
             except git.exc.InvalidGitRepositoryError:
                 return False
